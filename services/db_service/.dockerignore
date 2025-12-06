@@ -1,6 +1,0 @@
-**/__pycache__
-**/*.log
-**/.git
-**/node_modules
-**/.venv
-.env
