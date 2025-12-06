@@ -1,0 +1,136 @@
+version: '3.9'
+
+networks:
+  kafka-network:
+    driver: bridge
+
+services:
+  zookeeper:
+    image: bitnami/zookeeper:3.7.0
+    container_name: zookeeper
+    ports:
+      - '2181:2181'
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    networks:
+      - kafka-network
+
+  kafka:
+    image: bitnami/kafka:2.8.0
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    depends_on:
+      - zookeeper
+    networks:
+      - kafka-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+
+  kafdrop:
+    image: obsidiandynamics/kafdrop:4.0.0
+    ports:
+      - "9000:9000"
+    environment:
+      KAFKA_BROKERCONNECT: "kafka:9092"
+      JVM_OPTS: "-Xms32M -Xmx64M"
+    depends_on:
+      - kafka
+    networks:
+      - kafka-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    restart: always
+    ports:
+      - 5432:${POSTGRES_PORT}
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+      - ./utils/init_scripts:/docker-entrypoint-initdb.d
+    environment:
+      - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    healthcheck:
+      test: "pg_isready --username=${POSTGRES_USER} && psql --username=${POSTGRES_USER} --list"
+      interval: 5s
+      timeout: 1s
+      retries: 10
+      start_period: 5s
+    networks:
+      - kafka-network
+
+  back:
+    build:
+      context: ./services/
+      dockerfile: ./back/Dockerfile
+    command: poetry run app -V
+    container_name: back
+    restart: unless-stopped
+    volumes:
+      - ./services/back/:/app/
+      - ./utils/:/app/back/utils/
+    env_file:
+      - ./.env
+    ports:
+      - 8004:8000
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - kafka-network
+
+  processor_images:
+    build:
+      context: ./services/
+      dockerfile: ./processor_images/Dockerfile
+    command: poetry run app -V
+    container_name: processor_images
+    restart: unless-stopped
+    volumes:
+      - ./services/processor_images/:/app/
+      - ./utils/:/app/processor_images/utils/
+    env_file:
+      - ./.env
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - kafka-network
+
+  scraper:
+    build:
+      context: ./services/
+      dockerfile: ./scraper/Dockerfile
+    command: poetry run app -V
+    container_name: scraper
+    restart: unless-stopped
+    volumes:
+      - ./services/scraper/:/app/
+      - ./utils/:/app/scraper/utils/
+    env_file:
+      - ./.env
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - kafka-network
+
+volumes:
+  postgres_data:

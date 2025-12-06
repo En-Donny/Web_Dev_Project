@@ -1,0 +1,21 @@
+# Ignore temporary / binary files
+*.o
+*.obj
+*.a
+*.pyc
+*.log
+
+# Ignore temporary directories
+__pycache__
+
+# Ignore storage directories
+postgres_data/
+**/logging
+!/logging
+all_saved_imgs/
+**/saved_imgs
+
+.idea/
+venv
+kafka_logs
+*.env

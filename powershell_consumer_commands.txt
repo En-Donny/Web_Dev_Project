@@ -1,0 +1,8 @@
+Для онлайн просмотра приходящих сообщений
+docker exec kafka kafka-run-class.sh kafka.tools.GetOffsetShell --broker-list localhost:9092 --topic image_requests --time -1
+
+Для отображения истории сообщений конкретного топика
+docker exec -it kafka kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic image_responses --from-beginning --property print.key=true
+
+Для подключения к БД напрямую через контейнер
+docker exec -it postgres psql -U postgres -c "\l"
