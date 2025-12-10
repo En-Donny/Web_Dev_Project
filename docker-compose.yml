@@ -1,5 +1,3 @@
-version: '3.9'
-
 networks:
   kafka-network:
     driver: bridge
@@ -16,30 +14,40 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
     networks:
       - kafka-network
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   kafka:
     image: confluentinc/cp-kafka:6.2.2
     hostname: kafka
     container_name: kafka
     ports:
-      - "9092:9092"
+        - "9092:9092"
+        - "29092:29092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
-      # ПРОСТОЙ вариант: один listener, один advertised listener
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_INTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_INTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_healthy  
     networks:
       - kafka-network
     healthcheck:
       test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list || exit 1"]
-      interval: 10s
+      interval: 5s
       timeout: 10s
-      retries: 15
+      retries: 5
+      start_period: 60s
 
   kafdrop:
     image: obsidiandynamics/kafdrop:4.0.0
@@ -62,6 +70,7 @@ services:
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
       - ./utils/init_scripts:/docker-entrypoint-initdb.d
+      - ./utils/init_scripts/init_base.sql:/docker-entrypoint-initdb.d/init_base.sql
     environment:
       - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
       - POSTGRES_DB=${POSTGRES_DB}
@@ -75,16 +84,6 @@ services:
       start_period: 5s
     networks:
       - kafka-network
-
-  adminer:
-    image: adminer
-    restart: always
-    ports:
-      - 8080:8080
-    networks:
-      - kafka-network
-    depends_on:
-      - postgres
 
   back:
     build:
@@ -130,22 +129,44 @@ services:
     networks:
       - kafka-network
 
-  scraper:
+  # scraper:
+  #   build:
+  #     context: ./services/
+  #     dockerfile: ./scraper/Dockerfile
+  #   command: poetry run app -V
+  #   container_name: scraper
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ./services/scraper/:/app/
+  #     - ./utils/:/app/scraper/utils/
+  #   env_file:
+  #     - ./.env
+  #   environment:
+  #     - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+  #   depends_on:
+  #     kafka:
+  #       condition: service_healthy
+  #   networks:
+  #     - kafka-network
+
+  orders:
     build:
       context: ./services/
-      dockerfile: ./scraper/Dockerfile
+      dockerfile: ./orders/Dockerfile
     command: poetry run app -V
-    container_name: scraper
+    container_name: orders
     restart: unless-stopped
     volumes:
-      - ./services/scraper/:/app/
-      - ./utils/:/app/scraper/utils/
+      - ./services/orders/:/app/
+      - ./utils/:/app/orders/utils/
     env_file:
       - ./.env
     environment:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
     depends_on:
       kafka:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     networks:
       - kafka-network

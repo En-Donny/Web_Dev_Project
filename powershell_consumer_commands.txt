@@ -6,3 +6,6 @@ docker exec -it kafka kafka-console-consumer.sh --bootstrap-server localhost:909
 
 Для подключения к БД напрямую через контейнер
 docker exec -it postgres psql -U postgres -c "\l"
+
+Для просмотра таблицы outbox через консоль
+ watch -n 5 "docker exec -it postgres psql -U postgres -d docker_test -c 'SELECT * FROM outbox;'"

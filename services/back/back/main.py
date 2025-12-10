@@ -65,6 +65,8 @@ class KafkaClient:
                 topic = None
                 if task["request_type"] in ["highlight", "merge"]:
                     topic = os.getenv('REQUEST_TOPIC')
+                elif "order" in task["request_type"]:
+                    topic = os.getenv('ORDERS_REQUEST_TOPIC')
                 else:
                     topic = os.getenv('SCRAPE_TOPIC')
                 data = task["request_data"]
@@ -104,6 +106,18 @@ async def highlight_particular_image(request: Request):
 async def merge_imgs(request: Request):
     return await process_request(request, 'merge')
 
+@app.post('/order_create')
+async def create_order(request: Request):
+    return await process_request(request, 'order_create')
+
+@app.post('/order_update')
+async def create_order(request: Request):
+    return await process_request(request, 'order_update')
+
+@app.get('/order_all_get')
+async def create_order(request: Request):
+    return await process_request(request, 'order_all_get')
+
 async def approve_send_request(topic, data, correlation_id):
     global kafka_client
     future = asyncio.Future()
@@ -115,7 +129,8 @@ async def approve_send_request(topic, data, correlation_id):
     )
     try:
         result = await asyncio.wait_for(future, timeout=30.0)
-        return Response(status_code=200, content=result, media_type="application/json")
+        logger.info(result)
+        return Response(status_code=200, content=json.dumps(result), media_type="application/json")
     except asyncio.TimeoutError:
         logger.error(f"Timeout for request {correlation_id}")
         return Response(status_code=504, content="Request timeout")
@@ -136,6 +151,10 @@ async def process_request(request: Request, request_type: str):
         if request_type in ["highlight", "merge"]:
             topic = os.getenv('REQUEST_TOPIC')
             data = await request.json()
+        elif "order" in request_type:
+            topic = os.getenv('ORDERS_REQUEST_TOPIC')
+            if request_type != 'order_all_get':
+                data = await request.json()
         else:
             topic = os.getenv('SCRAPE_TOPIC')
         message = {
@@ -146,7 +165,7 @@ async def process_request(request: Request, request_type: str):
         data = json.dumps(message)
         status = await db_manager.insert_new_request(correlation_id, request_type, data)
         error_maker += 1
-        if not status and (error_maker % 3 < 2):
+        if not status and (error_maker % 8 != 7):
             logger.info(f"Task successfully added to outbox!")
             return await approve_send_request(topic, data, correlation_id)
     except Exception as e:
@@ -163,146 +182,3 @@ def start():
         port=int(os.getenv("BACK_PORT")),
         reload=True
     )
-
-
-
-# """
-# Файл, перенаправляющий запросы к FastAPI на другие сервисы.
-# """
-
-# import uvicorn
-# import os
-# import aiohttp
-# from fastapi import FastAPI, Request, Response, Depends
-# from back.logging.logger import get_logger
-# from back.producer import get_producer, AIOBackProducer
-
-# app = FastAPI()
-# session: aiohttp.ClientSession
-# logger = get_logger("BACK")
-# server_error_code = 500
-# server_error_text = "Something wrong on the server side!"
-
-
-# async def send_post(request: Request, url_request: str):
-#     """
-#     Метод для формирования и отправки POST-запроса.
-
-#     :param request: объект запроса.
-#     :param url_request: url-адрес отправки запроса в формате str.
-#     :return: Response.
-#     """
-#     try:
-#         async with session.post(
-#                 url_request,
-#                 headers=request.headers,
-#                 data=await request.body()
-#         ) as resp:
-#             return Response(status_code=resp.status,
-#                             headers=resp.headers,
-#                             content=await resp.content.read())
-#     except Exception as e:
-#         logger.error(f"Got error while processing the request! REASON: {e}")
-#         return Response(status_code=server_error_code,
-#                         content=server_error_text)
-
-
-# async def send_get(request: Request, url_request: str):
-#     """
-#     Метод для формирования и отправки GET-запроса.
-
-#     :param request: объект запроса.
-#     :param url_request: url-адрес отправки запроса в формате str.
-#     :return: Response.
-#     """
-#     try:
-#         async with session.get(url_request, headers=request.headers) as resp:
-#             return Response(status_code=resp.status,
-#                             headers=resp.headers,
-#                             content=await resp.content.read())
-#     except Exception as e:
-#         logger.error(f"Got error while processing the request! REASON: {e}")
-#         return Response(status_code=server_error_code,
-#                         content=server_error_text)
-
-
-# @app.on_event("startup")
-# async def startup_event():
-#     global session
-#     session = aiohttp.ClientSession()
-
-
-# @app.on_event("shutdown")
-# async def shutdown_event():
-#     global session
-#     await session.close()
-
-
-# @app.get("/scrape")
-# async def scrape(request: Request,
-#                  producer: AIOBackProducer = Depends(get_producer)):
-#     return await send_get(request, os.getenv('SCRAPER_URL'))
-
-
-# @app.post('/hello')
-# async def hello(request: Request):
-#     return await send_post(request, os.getenv('GET_ONE_URL'))
-
-
-# @app.get('/clear_all')
-# async def clear_all(request: Request):
-#     return await send_get(request, os.getenv('DELETE_URL'))
-
-
-# @app.get('/highlight_all_images')
-# async def highlight_all_images(request: Request):
-#     return await send_get(request, os.getenv('PROCESSOR_URL'))
-
-
-# @app.post('/highlight_particular_image')
-# async def highlight_particular_image(request: Request):
-#     return await send_post(request, os.getenv('PROCESSOR_ONE_URL'))
-
-
-# @app.post('/merge_imgs')
-# async def merge_imgs(request: Request):
-#     return await send_post(request, os.getenv('MERGE_URL'))
-
-
-# @app.post('/find_all_complementary')
-# async def find_complementary(request: Request):
-#     return await send_post(request, os.getenv('CV2_IMG_SEARCH_URL_HSV'))
-
-
-# @app.post('/find_all_similar_by_lab')
-# async def find_all_similar_by_lab(request: Request):
-#     return await send_post(request, os.getenv('CV2_IMG_SEARCH_URL_LAB'))
-
-
-# @app.get('/get_all_resnet_embeddings')
-# async def get_all_resnet_embeddings(request: Request):
-#     return await send_get(request, os.getenv('GET_EMBEDDINGS_RESNET_URL'))
-
-
-# @app.get('/get_all_clip_embeddings')
-# async def get_all_clip_embeddings(request: Request):
-#     return await send_get(request, os.getenv('GET_EMBEDDINGS_CLIP_URL'))
-
-
-# @app.post('/get_top_24_resnet_similar')
-# async def get_top_24_resnet_similar(request: Request):
-#     return await send_post(request, os.getenv('MODEL_IMG_SEARCH_RESNET_URL'))
-
-
-# @app.post('/get_top_25_clip_similar')
-# async def get_top_25_clip_similar(request: Request):
-#     return await send_post(request, os.getenv('MODEL_IMG_SEARCH_CLIP_URL'))
-
-
-# def start():
-#     uvicorn.run(
-#         "back.main:app",
-#         host=os.getenv("BACK_HOST"),
-#         port=int(os.getenv("BACK_PORT")),
-#         reload=True
-#     )

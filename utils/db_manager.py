@@ -7,7 +7,7 @@ import asyncpg
 request_status_success = 0
 request_status_failure = 1
 
-from back.utils.logger import get_logger
+from .logger import get_logger
 
 logger = get_logger("DB_MANAGER")
 
@@ -65,6 +65,7 @@ class DB_Manager:
             return request_status_success
         except asyncpg.exceptions.UniqueViolationError:
             return request_status_failure
+        
 
     async def get_all_req_new(self):
         """
@@ -98,42 +99,57 @@ class DB_Manager:
             logger.error(f"Got error while updating record in DB! REASON {e}")
 
 
-    # async def update_one_record(self,
-    #                             image_id: int,
-    #                             image_name: str,
-    #                             image_hash,
-    #                             image_path,
-    #                             is_highlighted):
-    #     """
-    #     Метод, предназначенный для изменения записи в таблице.
+    async def create_new_order(self,
+                               order_id,
+                               order_info):
+        """
+        Метод для вставки данных о новом заказе в таблицу orders.
 
-    #     :param image_id: ID записи в таблице.
-    #     :param image_name: Имя изображения в таблице.
-    #     :param image_hash: Хэш изображения в таблице.
-    #     :param image_path: Полный путь до изображения.
-    #     :param is_highlighted: Флаг обработанности изображения.
-    #     :return: None.
-    #     """
-    #     query = """
-    #     UPDATE 
-    #         scrapped_images 
-    #     SET 
-    #         img_name = $2, 
-    #         img_hash = $3, 
-    #         img_path = $4, 
-    #         is_highlighted = $5
-    #     WHERE 
-    #         id = $1;
-    #     """
-    #     try:
-    #         await self.pool.execute(query,
-    #                                 image_id,
-    #                                 image_name,
-    #                                 image_hash,
-    #                                 image_path,
-    #                                 is_highlighted)
-    #     except Exception as e:
-    #         logger.error(f"Got error while updating record in DB! REASON {e}")
+        :param order_id: ID заказа.
+        :param order_info: информация заказа.
+        :param order_status: статус заказа.
+        :return: Флаг статуса вставки изображения в таблицу.
+        """
+        query = """
+        INSERT INTO public.orders (order_id,
+                                   order_info,
+                                   order_status)
+        VALUES ($1, $2, $3)
+        """
+        try:
+            await self.pool.execute(query, order_id, order_info,'new')
+            return request_status_success
+        except asyncpg.exceptions.UniqueViolationError:
+            return request_status_failure
+
+    async def update_order_info(self, order_id, new_data):
+        """
+        Метод, предназначенный для изменения информации о заказе
+
+        :return: Список Record'ов или сообщение об ошибке, обернутое в список.
+        """
+        query = """
+        UPDATE public.orders SET order_info = $2, order_status = 'changed'
+        WHERE order_id = $1
+        """
+        try:
+            await self.pool.execute(query, order_id, new_data)
+        except Exception as e:
+            logger.error(f"Got error while updating record in DB! REASON {e}")
+
+    async def get_all_orders(self):
+        """
+        Метод для получения всех ордеров.
+
+        :return: Record или сообщение об ошибке, обернутое в список.
+        """
+        query = """
+        SELECT * FROM public.orders
+        """
+        try:
+            return await self.pool.fetch(query)
+        except:
+            return ["FAILED OF SEARCHING"]
 
     async def clear_all(self):
         """
