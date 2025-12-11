@@ -109,36 +109,16 @@ services:
     networks:
       - kafka-network
 
-  processor_images:
-    build:
-      context: ./services/
-      dockerfile: ./processor_images/Dockerfile
-    command: poetry run app -V
-    container_name: processor_images
-    restart: unless-stopped
-    volumes:
-      - ./services/processor_images/:/app/
-      - ./utils/:/app/processor_images/utils/
-    env_file:
-      - ./.env
-    environment:
-      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-    depends_on:
-      kafka:
-        condition: service_healthy
-    networks:
-      - kafka-network
-
-  # scraper:
+  # processor_images:
   #   build:
   #     context: ./services/
-  #     dockerfile: ./scraper/Dockerfile
+  #     dockerfile: ./processor_images/Dockerfile
   #   command: poetry run app -V
-  #   container_name: scraper
+  #   container_name: processor_images
   #   restart: unless-stopped
   #   volumes:
-  #     - ./services/scraper/:/app/
-  #     - ./utils/:/app/scraper/utils/
+  #     - ./services/processor_images/:/app/
+  #     - ./utils/:/app/processor_images/utils/
   #   env_file:
   #     - ./.env
   #   environment:
@@ -168,6 +148,43 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+    networks:
+      - kafka-network
+
+  frontend-shell:
+    build:
+      context: ./frontend/frontend_shell
+      dockerfile: Dockerfile
+    container_name: frontend-shell
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    networks:
+      - kafka-network
+    depends_on:
+      - mf-orders
+      - mf-admin
+      - back
+
+  mf-orders:
+    build:
+      context: ./frontend/mf_orders
+      dockerfile: Dockerfile
+    container_name: mf-orders
+    restart: unless-stopped
+    ports:
+      - "3001:80"
+    networks:
+      - kafka-network
+
+  mf-admin:
+    build:
+      context: ./frontend/mf_admin
+      dockerfile: Dockerfile
+    container_name: mf-admin
+    restart: unless-stopped
+    ports:
+      - "3002:80"
     networks:
       - kafka-network
 

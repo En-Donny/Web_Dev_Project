@@ -129,7 +129,7 @@ async def approve_send_request(topic, data, correlation_id):
     )
     try:
         result = await asyncio.wait_for(future, timeout=30.0)
-        logger.info(result)
+        # logger.info(result)
         return Response(status_code=200, content=json.dumps(result), media_type="application/json")
     except asyncio.TimeoutError:
         logger.error(f"Timeout for request {correlation_id}")
