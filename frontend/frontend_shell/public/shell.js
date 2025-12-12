@@ -2,7 +2,8 @@ const root = document.getElementById('app');
 const routes = {
   '/': { type: 'static', html: `<section class="container"><h2>Home</h2><p>Добро пожаловать</p></section>` },
   '/orders': { type: 'remote', url: '/mf/orders' }, // мы будем делать fetch к mf-orders
-  '/admin': { type: 'remote', url: '/mf/admin' }
+  '/admin': { type: 'remote', url: '/mf/admin' },
+  '/cart': { type: 'remote', url: '/mf/cart' }
 };
 
 function setTheme(theme){
@@ -38,123 +39,176 @@ async function navigate(path){
   await loadRoute(path);
 }
 
-async function loadRoute(path){
+
+async function loadRoute(path) {
   const route = routes[path] || routes['/'];
-  if(route.type === 'static'){
-    // если простая статическая страница — удалим предыдущие MF-ресурсы и просто вставим html
+  if (route.type === 'static') {
+    console.log('[MF] route static, removing injected resources');
     removeInjectedMFResources();
     root.innerHTML = route.html;
     return;
-  } else if(route.type === 'remote'){
-    root.innerHTML = `<div class="container"><p>Загрузка...</p></div>`;
-    try{
-      const resp = await fetch(route.url);
-      if(!resp.ok) throw new Error('Failed to load microfrontend: ' + resp.status);
-      const htmlText = await resp.text();
+  }
 
-      // Парсим HTML
-      const parser = new DOMParser();
-      const parsedDoc = parser.parseFromString(htmlText, 'text/html');
+  console.log('[MF] route remote ->', route.url);
+  root.innerHTML = `<div class="container"><p>Загрузка...</p></div>`;
 
-      // Определяем имя микрофронта (mf-orders / mf-admin) из route.url
-      // ожидаем route.url вроде "/mf/orders" или "/mf/admin"
-      let mfName = route.url.replace(/^\/+|\/+$/g, ''); // "mf/orders"
-      mfName = mfName.replace(/\//g, '-'); // "mf-orders"
+  try {
+    // принудительно без кэша (для отладки)
+    const resp = await fetch(route.url, { cache: 'no-store' });
+    console.log('[MF] fetch', route.url, 'status', resp.status, 'resp.url', resp.url, 'type', resp.type);
 
-      // Вычисляем baseHref: <base> в microfrontend > route.url
-      const baseEl = parsedDoc.querySelector('base');
-      let baseHref = baseEl ? baseEl.getAttribute('href') : route.url;
-      if(!baseHref.endsWith('/')) baseHref = baseHref + '/';
-      // абсолютная база относительно текущего окна
-      const absoluteBase = new URL(baseHref, window.location.origin).href;
+    if (!resp.ok) throw new Error('Failed to load microfrontend: ' + resp.status);
 
-      // --- Удаляем ресурсы предыдущих microfrontends (css, scripts, inline styles) ---
-      // Оставляем любые теги без data-mf (например global shell css)
-      removeInjectedMFResources();
+    const htmlText = await resp.text();
+    console.log('[MF] html length', htmlText.length);
 
-      // --- Подключаем CSS: резолвим href и добавляем в head (с пометкой data-mf) ---
-      const links = Array.from(parsedDoc.querySelectorAll('link[rel="stylesheet"]'));
-      for(const l of links){
-        const href = l.getAttribute('href') || '';
-        const absHref = new URL(href, absoluteBase).href;
-        // Если уже есть такой link с точно таким href и data-mf (редко, т.к. мы удаляем), можно пропустить.
-        if(!document.head.querySelector(`link[rel="stylesheet"][href="${absHref}"]`)){
-          const newLink = document.createElement('link');
-          newLink.rel = 'stylesheet';
-          newLink.href = absHref;
-          newLink.setAttribute('data-mf', mfName);
-          document.head.appendChild(newLink);
-          // не ждём загрузку; CSS применяется автоматически
-        }
-        l.remove();
-      }
+    const parser = new DOMParser();
+    const parsedDoc = parser.parseFromString(htmlText, 'text/html');
 
-      // --- Копируем inline <style> теги (помечаем data-mf) ---
-      const styles = Array.from(parsedDoc.querySelectorAll('style'));
-      for(const s of styles){
-        const newStyle = s.cloneNode(true);
-        newStyle.setAttribute('data-mf', mfName);
-        document.head.appendChild(newStyle);
-        s.remove();
-      }
+    // mfName
+    let mfName = route.url.replace(/^\/+|\/+$/g, '').replace(/\//g, '-'); // "mf-orders"
 
-      // --- Вставляем остальной контент в root (без <script>) ---
-      const scriptsInDoc = Array.from(parsedDoc.querySelectorAll('script'));
-      scriptsInDoc.forEach(s => s.remove());
-      // Вставляем body содержимое
-      const bodyContent = parsedDoc.body ? parsedDoc.body.innerHTML : parsedDoc.documentElement.innerHTML;
-      root.innerHTML = bodyContent;
+    // вычисляем абсолютную базу относительно resp.url или <base>
+    const baseEl = parsedDoc.querySelector('base');
+    let baseHref = baseEl ? baseEl.getAttribute('href') : null;
+    let absoluteBase;
+    if (baseHref) absoluteBase = new URL(baseHref, resp.url).href;
+    else absoluteBase = resp.url.endsWith('/') ? resp.url : resp.url + '/';
+    if (!absoluteBase.endsWith('/')) absoluteBase += '/';
+    console.log('[MF] absoluteBase:', absoluteBase);
 
-      // --- Выполним скрипты в исходном порядке ---
-      // Получаем скрипты заново из исходного html (для сохранения порядка и inline/src)
-      const parsedForScripts = parser.parseFromString(htmlText, 'text/html');
-      const scriptsOrdered = Array.from(parsedForScripts.querySelectorAll('script'));
+    // очистка предыдущих MF-ресурсов
+    console.log('[MF] removing previous injected MF resources');
+    removeInjectedMFResources();
 
-      for(const s of scriptsOrdered){
-        if(s.src){
-          // резолвим src относительно absoluteBase
-          const rawSrc = s.getAttribute('src');
-          const absSrc = new URL(rawSrc, absoluteBase).href;
-          const newScript = document.createElement('script');
-          if(s.type) newScript.type = s.type;
-          // помечаем, чтобы можно было удалить при следующем переходе
-          newScript.setAttribute('data-mf', mfName);
-          newScript.src = absSrc;
-          // создаём промис ожидания загрузки — это сохраняет порядок выполнения
-          await new Promise((resolve, reject) => {
-            newScript.onload = () => resolve();
-            newScript.onerror = (e) => {
-              console.error('Failed to load script', absSrc, e);
-              // всё же resolve, чтобы не блокировать навигацию; можно reject если нужен жесткий fail
-              resolve();
-            };
-            document.body.appendChild(newScript);
-          });
-        } else {
-          // inline script — создаём и выполняем
-          const inline = document.createElement('script');
-          if(s.type) inline.type = s.type;
-          inline.textContent = s.textContent;
-          inline.setAttribute('data-mf', mfName);
-          document.body.appendChild(inline);
-        }
-      }
-
-    }catch(err){
-      root.innerHTML = `<div class="container"><p>Ошибка загрузки страницы: ${err.message}</p></div>`;
-      console.error(err);
+    // --- Обработка preload (modulepreload / preload) ---
+    const preloadLinks = Array.from(parsedDoc.querySelectorAll('link[rel="modulepreload"], link[rel="preload"], link[rel="prefetch"]'));
+    for (const l of preloadLinks) {
+      const rel = l.getAttribute('rel');
+      const href = l.getAttribute('href') || '';
+      const absHref = new URL(href, absoluteBase).href;
+      console.log('[MF] add preload', rel, absHref);
+      const newL = document.createElement('link');
+      newL.rel = rel;
+      if (l.getAttribute('as')) newL.as = l.getAttribute('as');
+      if (l.getAttribute('crossorigin')) newL.setAttribute('crossorigin', l.getAttribute('crossorigin'));
+      newL.href = absHref;
+      newL.setAttribute('data-mf', mfName);
+      document.head.appendChild(newL);
+      l.remove();
     }
+
+    // --- CSS ---
+    const cssLinks = Array.from(parsedDoc.querySelectorAll('link[rel~="stylesheet"], link[rel="stylesheet"]'));
+    for (const l of cssLinks) {
+      const href = l.getAttribute('href') || '';
+      const absHref = new URL(href, absoluteBase).href;
+      console.log('[MF] add stylesheet', absHref);
+      const newLink = document.createElement('link');
+      newLink.rel = 'stylesheet';
+      newLink.href = absHref;
+      newLink.setAttribute('data-mf', mfName);
+      document.head.appendChild(newLink);
+      l.remove();
+    }
+
+    // --- inline styles ---
+    const styles = Array.from(parsedDoc.querySelectorAll('style'));
+    for (const s of styles) {
+      const newStyle = s.cloneNode(true);
+      newStyle.setAttribute('data-mf', mfName);
+      document.head.appendChild(newStyle);
+      s.remove();
+    }
+
+    // --- Удаляем все <script> из parsedDoc перед вставкой контента ---
+    const scriptsInDoc = Array.from(parsedDoc.querySelectorAll('script'));
+    scriptsInDoc.forEach(s => s.remove());
+
+    // --- Вставляем тело ---
+    const bodyContent = parsedDoc.body ? parsedDoc.body.innerHTML : parsedDoc.documentElement.innerHTML;
+    root.innerHTML = bodyContent;
+    console.log('[MF] content injected into root');
+
+    // --- Теперь выполняем скрипты в исходном порядке ---
+    const parsedForScripts = parser.parseFromString(htmlText, 'text/html');
+    const scriptsOrdered = Array.from(parsedForScripts.querySelectorAll('script'));
+    console.log('[MF] scripts to execute:', scriptsOrdered.length);
+
+    for (const s of scriptsOrdered) {
+      if (s.src) {
+        const rawSrc = s.getAttribute('src');
+        // Для отладки добавим временный query-param, чтобы гарантировать запрос:
+        const absSrc = new URL(rawSrc, absoluteBase).href;
+        const debugSrc = absSrc + (absSrc.includes('?') ? '&' : '?') + `mf=${mfName}&t=${Date.now()}`;
+        console.log('[MF] creating external script', rawSrc, '->', debugSrc);
+
+        const newScript = document.createElement('script');
+
+        // копируем атрибуты
+        if (s.getAttribute('type')) newScript.type = s.getAttribute('type');
+        if (s.hasAttribute('nomodule')) newScript.setAttribute('nomodule', '');
+        if (s.getAttribute('crossorigin')) newScript.setAttribute('crossorigin', s.getAttribute('crossorigin'));
+        if (s.getAttribute('integrity')) newScript.setAttribute('integrity', s.getAttribute('integrity'));
+        if (s.getAttribute('referrerpolicy')) newScript.setAttribute('referrerpolicy', s.getAttribute('referrerpolicy'));
+        // порядок выполнения гарантуем:
+        newScript.async = false;
+        newScript.src = debugSrc;
+        newScript.setAttribute('data-mf', mfName);
+
+        // лог до вставки
+        console.log('[MF] append script to head', debugSrc);
+        await new Promise((resolve) => {
+          newScript.onload = () => {
+            console.log('[MF] script loaded', debugSrc);
+            resolve();
+          };
+          newScript.onerror = (e) => {
+            console.error('[MF] script error', debugSrc, e);
+            resolve(); // не блокируем навигацию
+          };
+          // добавляем в head — большинство сборщиков ожидают скрипты в head
+          (document.head || document.body).appendChild(newScript);
+        });
+      } else {
+        // inline script
+        console.log('[MF] creating inline script');
+        const inline = document.createElement('script');
+        if (s.getAttribute('type')) inline.type = s.getAttribute('type');
+        inline.textContent = s.textContent;
+        inline.setAttribute('data-mf', mfName);
+        (document.body || document.head).appendChild(inline);
+      }
+    }
+
+    console.log('[MF] loadRoute finished for', route.url);
+  } catch (err) {
+    root.innerHTML = `<div class="container"><p>Ошибка загрузки страницы: ${err.message}</p></div>`;
+    console.error('[MF] loadRoute error', err);
   }
 }
 
-// Утилита: удаляет все ранее вставленные ресурсы, помеченные data-mf
+// --- Утилита: удаляет все ранее вставленные ресурсы, помеченные data-mf ---
 function removeInjectedMFResources(){
-  // Удаляем link rel=stylesheet, style и script с data-mf
-  const injectedLinks = document.head.querySelectorAll('link[data-mf]');
-  injectedLinks.forEach(el => el.remove());
-  const injectedStyles = document.head.querySelectorAll('style[data-mf]');
-  injectedStyles.forEach(el => el.remove());
-  const injectedScripts = document.querySelectorAll('script[data-mf]');
-  injectedScripts.forEach(el => el.remove());
-  // Дополнительно — можно очищать root, но loadRoute делает root.innerHTML = ...
+  console.log('[MF] removeInjectedMFResources called');
+  // link
+  document.querySelectorAll('link[data-mf]').forEach(el => {
+    console.log('[MF] removing link', el.href || el.getAttribute('href'));
+    el.remove();
+  });
+  // styles
+  document.querySelectorAll('style[data-mf]').forEach(el => {
+    console.log('[MF] removing style');
+    el.remove();
+  });
+  // scripts
+  document.querySelectorAll('script[data-mf]').forEach(el => {
+    console.log('[MF] removing script', el.src || '(inline)');
+    el.remove();
+  });
+  // base
+  document.querySelectorAll('base[data-mf]').forEach(el => {
+    console.log('[MF] removing base', el.href || el.getAttribute('href'));
+    el.remove();
+  });
 }

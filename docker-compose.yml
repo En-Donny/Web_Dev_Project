@@ -109,26 +109,6 @@ services:
     networks:
       - kafka-network
 
-  # processor_images:
-  #   build:
-  #     context: ./services/
-  #     dockerfile: ./processor_images/Dockerfile
-  #   command: poetry run app -V
-  #   container_name: processor_images
-  #   restart: unless-stopped
-  #   volumes:
-  #     - ./services/processor_images/:/app/
-  #     - ./utils/:/app/processor_images/utils/
-  #   env_file:
-  #     - ./.env
-  #   environment:
-  #     - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-  #   depends_on:
-  #     kafka:
-  #       condition: service_healthy
-  #   networks:
-  #     - kafka-network
-
   orders:
     build:
       context: ./services/
@@ -185,6 +165,17 @@ services:
     restart: unless-stopped
     ports:
       - "3002:80"
+    networks:
+      - kafka-network
+
+  mf-cart:
+    build:
+      context: ./frontend/mf_cart
+      dockerfile: Dockerfile
+    container_name: mf-cart
+    restart: unless-stopped
+    ports:
+      - "3003:80"
     networks:
       - kafka-network
 

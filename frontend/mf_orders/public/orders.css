@@ -1,0 +1,50 @@
+.container { max-width: 1100px; margin:0 auto; padding:1rem; color:var(--fg); }
+.orders-list { display:flex; flex-direction:column; gap:12px; margin-top:1rem; }
+.order-item {
+  display:flex;
+  gap:12px;
+  align-items:center;
+  padding:10px;
+  border:1px solid var(--card-border);
+  border-radius:8px;
+  background:var(--card-bg);       /* использует переменную темы */
+  color:var(--card-fg);           /* текст внутри карточки */
+  transition: box-shadow .12s ease, transform .06s ease;
+}
+.order-item:hover { box-shadow: 0 6px 18px rgba(0,0,0,0.08); transform: translateY(-2px); }
+
+.item-checkbox input { width:20px; height:20px; }
+
+/* метаданные */
+.meta { flex:1; }
+.meta h3 { margin:0; color:var(--card-fg); }
+.meta p { margin:6px 0 0; color:var(--muted); }
+
+/* price */
+.price-block { min-width:100px; text-align:right; font-weight:600; color:var(--card-fg); }
+
+/* controls top */
+.controls-top { display:flex; gap:8px; margin-bottom:8px; }
+button { cursor:pointer; }
+
+/* cart action */
+.cart-actions { margin-top:16px; text-align:right; }
+
+/* inputs (сделать согласованными с темой) */
+input, textarea {
+  background: var(--input-bg);
+  color: var(--input-fg);
+  border: 1px solid var(--card-border);
+  padding: 8px;
+  border-radius: 6px;
+  font: inherit;
+}
+
+/* disabled button look */
+button[disabled] { opacity:0.6; cursor:not-allowed; }
+
+/* responsive */
+@media (max-width:600px){
+  .order-item { flex-direction:column; align-items:flex-start; }
+  .price-block { align-self:flex-end; }
+}

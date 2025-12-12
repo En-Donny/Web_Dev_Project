@@ -3,20 +3,27 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Orders</title>
+  <title>Catalog</title>
+
   <base href="/mf/orders/">
+
   <link rel="stylesheet" href="orders.css" />
 </head>
 <body>
   <section class="container">
-    <h2>Заказы</h2>
+    <h2>Каталог товаров</h2>
+    <p id="catalog-desc">Ниже — список доступных товаров.</p>
+    <div id="orders-controls" class="controls-top">
+      <button id="select-all-btn" type="button">Выбрать всё</button>
+      <button id="deselect-all-btn" type="button">Снять выделение</button>
+    </div>
     <div id="orders-root"><p>Загрузка...</p></div>
+
+    <div class="cart-actions">
+      <button id="add-to-cart-btn" disabled>Добавить товары в корзину</button>
+    </div>
   </section>
-<!-- 
-  <script>
-    // API base от shell/env
-    const API_BASE = window.__API_BASE__ || '/api'; // fallback
-  </script> -->
+
   <script type="module" src="orders.js"></script>
 </body>
 </html>

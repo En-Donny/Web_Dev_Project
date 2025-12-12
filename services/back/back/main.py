@@ -165,7 +165,7 @@ async def process_request(request: Request, request_type: str):
         data = json.dumps(message)
         status = await db_manager.insert_new_request(correlation_id, request_type, data)
         error_maker += 1
-        if not status and (error_maker % 8 != 7):
+        if not status and (error_maker % 8 != 8):
             logger.info(f"Task successfully added to outbox!")
             return await approve_send_request(topic, data, correlation_id)
     except Exception as e:

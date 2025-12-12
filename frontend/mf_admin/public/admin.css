@@ -1,0 +1,63 @@
+:root { --form-gap: 12px; }
+
+.container {  max-width:1100px; margin:0 auto; padding:1rem; color:var(--fg); }
+
+/* Карточка формы */
+form#order-form {
+  background: var(--card-bg);
+  color: var(--card-fg);
+  border: 1px solid var(--card-border);
+  padding: 18px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.04);
+}
+
+/* Структура полей */
+.form-row { display:flex; gap:12px; margin-bottom: var(--form-gap); align-items:flex-start; }
+.form-row label { display:block; flex:1; font-size:14px; color:var(--card-fg); }
+
+/* Подписи и поля */
+label > span { display:block; margin-bottom:6px; color:var(--muted); font-size:13px; }
+input[type="text"], input[type="number"], textarea {
+  width:100%;
+  box-sizing:border-box;
+  padding:10px 12px;
+  border-radius:8px;
+  border: 1px solid var(--card-border);
+  background: var(--input-bg);
+  color: var(--input-fg);
+  font-size:14px;
+  transition: box-shadow .08s ease, border-color .08s ease;
+}
+input:focus, textarea:focus {
+  outline: none;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+  border-color: var(--accent);
+}
+
+/* Кнопки */
+.form-actions { display:flex; gap:10px; margin-top:10px; align-items:center; }
+.form-actions.button {
+  padding:8px 12px;
+  border-radius:8px;
+  border: none;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  font-weight:600;
+}
+button[disabled] { opacity:.6; cursor:not-allowed; }
+#reset-btn, #load-btn {
+  background:transparent;
+  color:var(--card-fg);
+  border:1px solid var(--card-border);
+}
+
+/* сообщение состояния */
+#msg { margin-top:10px; font-size:14px; }
+
+/* mobile */
+@media (max-width:720px){
+  .form-row { flex-direction:column; }
+  form#order-form { padding:14px; }
+}
