@@ -65,8 +65,8 @@ class KafkaClient:
                 topic = None
                 if task["request_type"] in ["highlight", "merge"]:
                     topic = os.getenv('REQUEST_TOPIC')
-                elif "order" in task["request_type"]:
-                    topic = os.getenv('ORDERS_REQUEST_TOPIC')
+                elif "product" in task["request_type"] or "statistics" in task["request_type"]:
+                    topic = os.getenv('PRODUCTS_REQUEST_TOPIC')
                 else:
                     topic = os.getenv('SCRAPE_TOPIC')
                 data = task["request_data"]
@@ -106,17 +106,26 @@ async def highlight_particular_image(request: Request):
 async def merge_imgs(request: Request):
     return await process_request(request, 'merge')
 
-@app.post('/order_create')
-async def create_order(request: Request):
-    return await process_request(request, 'order_create')
+@app.post('/product_create')
+async def create_product(request: Request):
+    return await process_request(request, 'product_create')
 
-@app.post('/order_update')
-async def create_order(request: Request):
-    return await process_request(request, 'order_update')
+@app.post('/product_update')
+async def create_product(request: Request):
+    return await process_request(request, 'product_update')
 
-@app.get('/order_all_get')
-async def create_order(request: Request):
-    return await process_request(request, 'order_all_get')
+@app.get('/product_all_get')
+async def create_product(request: Request):
+    return await process_request(request, 'product_all_get')
+
+@app.get('/statistics_all_get')
+async def create_product(request: Request):
+    return await process_request(request, 'statistics_all_get')
+
+@app.post('/statistics_update')
+async def create_product(request: Request):
+    return await process_request(request, 'statistics_update')
+
 
 async def approve_send_request(topic, data, correlation_id):
     global kafka_client
@@ -151,9 +160,9 @@ async def process_request(request: Request, request_type: str):
         if request_type in ["highlight", "merge"]:
             topic = os.getenv('REQUEST_TOPIC')
             data = await request.json()
-        elif "order" in request_type:
-            topic = os.getenv('ORDERS_REQUEST_TOPIC')
-            if request_type != 'order_all_get':
+        elif "product" in request_type or "statistic" in request_type:
+            topic = os.getenv('PRODUCTS_REQUEST_TOPIC')
+            if request_type != 'product_all_get' and request_type != 'statistics_all_get':
                 data = await request.json()
         else:
             topic = os.getenv('SCRAPE_TOPIC')

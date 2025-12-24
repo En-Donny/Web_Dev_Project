@@ -9,14 +9,14 @@ function formatPrice(n){ return (Number(n) || 0).toFixed(2) + ' ₽'; }
 function getNodes() {
   return {
     root: document.getElementById('cart-root'),
-    summary: document.getElementById('cart-summary')
+    summary: document.getElementById('cart-summary'),
+    placeBtn: document.getElementById('place-order-btn')
   };
 }
 
 function renderCart(){
   const { root } = getNodes();
   if(!root) return;
-
   const items = loadCart();
   if(!items.length){
     root.innerHTML = '<p>Корзина пуста.</p>';
@@ -31,11 +31,14 @@ function renderCart(){
   items.forEach(it => {
     const el = document.createElement('div');
     el.className = 'cart-item';
-    // Вставляем кнопки "-" и "+" и span с количеством между ними
     el.innerHTML = `
+      <label class="item-checkbox">
+        <input type="checkbox" class="product-select" data-id="${escapeHtml(it.id)}" ${it.selected ? 'checked' : ''}>
+      </label>
+
       <div class="cart-meta">
         <h3>${escapeHtml(it.title)}</h3>
-        <small>ID: ${escapeHtml(it.order_id)}</small>
+        <small>ID: ${escapeHtml(it.product_id || it.product_id || '')}</small>
       </div>
 
       <div class="cart-controls">
@@ -55,28 +58,40 @@ function renderCart(){
   root.innerHTML = '';
   root.appendChild(list);
 
-  // Навешиваем обработчики (делегирование или по кнопкам)
+  // handlers
   attachCartHandlers();
   updateSummary();
+  updatePlaceButtonState();
 }
 
 function attachCartHandlers(){
   const { root } = getNodes();
   if(!root) return;
 
-  // обработка + / - кнопок (делегируем клики на контейнер)
+  // checkbox toggles (select/deselect product)
+  root.querySelectorAll('input.product-select').forEach(ch => {
+    ch.addEventListener('change', (e) => {
+      const id = e.target.dataset.id;
+      let items = loadCart();
+      const idx = items.findIndex(x => String(x.id) === String(id));
+      if(idx >= 0){
+        items[idx].selected = !!e.target.checked;
+        saveCart(items);
+        updateSummary();
+        updatePlaceButtonState();
+      }
+    });
+  });
+
+  // qty widgets
   root.querySelectorAll('.qty-controls').forEach(ctrl => {
     const id = ctrl.dataset.id;
     const btnInc = ctrl.querySelector('button[data-action="inc"]');
     const btnDec = ctrl.querySelector('button[data-action="dec"]');
     const valueNode = ctrl.querySelector('.qty-value');
 
-    btnInc.addEventListener('click', () => {
-      changeQty(id, 1, valueNode, ctrl);
-    });
-    btnDec.addEventListener('click', () => {
-      changeQty(id, -1, valueNode, ctrl);
-    });
+    btnInc.addEventListener('click', () => changeQty(id, 1, valueNode, ctrl));
+    btnDec.addEventListener('click', () => changeQty(id, -1, valueNode, ctrl));
 
     // поддержка клавиатуры: стрелки / +/- (опционально)
     ctrl.addEventListener('keydown', (e) => {
@@ -87,8 +102,7 @@ function attachCartHandlers(){
     // делаем контрол фокусируемым
     ctrl.tabIndex = 0;
   });
-
-  // удаление товара
+  // remove buttons
   root.querySelectorAll('.remove-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.id;
@@ -109,9 +123,7 @@ function changeQty(id, delta, valueNode, ctrlNode){
   items[idx].qty = newQty;
   saveCart(items);
 
-  // обновим UI: количество и цену в строке
   if(valueNode) valueNode.textContent = String(newQty);
-  // обновим цену рядом с контролом
   const priceNode = ctrlNode.closest('.cart-controls').querySelector('.cart-price');
   if(priceNode) priceNode.textContent = formatPrice(items[idx].price * items[idx].qty);
 
@@ -121,12 +133,54 @@ function changeQty(id, delta, valueNode, ctrlNode){
 function updateSummary(){
   const { summary } = getNodes();
   const items = loadCart();
-  const total = items.reduce((s, it) => s + (Number(it.price || 0) * Number(it.qty || 0)), 0);
+  const total = items.reduce((s,it) => s + ((it.selected ? (Number(it.price||0) * Number(it.qty||0)) : 0)), 0);
   if(summary) summary.innerHTML = `<div class="summary-row"><strong>Итого: ${formatPrice(total)}</strong></div>`;
 }
 
-// Инициализация: запускаем при готовности документа.
-// Сохраняем поведение, как у предыдущей версии (защита от гонки).
+function updatePlaceButtonState(){
+  const { placeBtn } = getNodes();
+  const items = loadCart();
+  // enable if at least one item exists (even if unchecked? usually needs 1 checked)
+  const anyChecked = items.some(i => i.selected);
+  if(placeBtn) placeBtn.disabled = !anyChecked;
+}
+
+// Build payload and POST to /api/statistics_update
+async function placeOrder() {
+  const items = loadCart();
+  if(!items.length) return;
+  const payload = {};
+  // user specified: rejected_delta = 1 if added to cart but not checked at ordering; success_delta = qty if checked
+  items.forEach(it => {
+    const key = String(it.id);
+    if(it.selected) {
+      payload[key] = { rejected_delta: 0, success_delta: Number(it.qty || 0) };
+    } else {
+      payload[key] = { rejected_delta: 1, success_delta: 0 };
+    }
+  });
+
+  try {
+    const res = await fetch('/api/statistics_update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(()=>null);
+      throw new Error(`HTTP ${res.status} ${text || ''}`);
+    }
+    // Успех — показать сообщение и (опционально) очищать те товары, которые были отмечены/или всё)
+    alert('Заказ отправлен успешно ✅');
+    // при желании: можно удалить из корзины отмеченные товары:
+    // let remaining = items.filter(i => !i.selected); saveCart(remaining); renderCart();
+  } catch (err) {
+    console.error('placeOrder error', err);
+    alert('Ошибка при отправке заказа: ' + (err.message || err));
+  }
+}
+
+// init
 function runWhenReady(fn) {
   if (document.readyState === 'complete' || document.readyState === 'interactive') {
     try { fn(); } catch(e) { console.error(e); }
@@ -139,9 +193,25 @@ function runWhenReady(fn) {
 
 runWhenReady(() => {
   const attemptRender = (triesLeft = 5) => {
-    const { root } = getNodes();
-    if (root) { renderCart(); return; }
-    if (triesLeft <= 0) { console.warn('cart: root not found after retries'); return; }
+    const { root, placeBtn } = getNodes();
+    if (root) {
+      renderCart();
+      if(placeBtn) {
+        placeBtn.addEventListener('click', () => {
+          placeBtn.disabled = true;
+          placeOrder().finally(()=> {
+            // обновим состояние и кнопку
+            updatePlaceButtonState();
+            placeBtn.disabled = false;
+          });
+        });
+      }
+      return;
+    }
+    if (triesLeft <= 0) {
+      console.warn('cart: root not found after retries');
+      return;
+    }
     setTimeout(() => attemptRender(triesLeft - 1), 50);
   };
   attemptRender(5);

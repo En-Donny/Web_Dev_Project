@@ -18,13 +18,21 @@ CREATE TABLE IF NOT EXISTS outbox (
     status_request TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS orders (
+CREATE TABLE IF NOT EXISTS products (
     id SERIAL PRIMARY KEY,
-    order_id TEXT NOT NULL,
-    order_info JSON NOT NULL,
-    order_status TEXT NOT NULL
+    product_id TEXT NOT NULL,
+    product_info JSON NOT NULL,
+    product_status TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS statistics (
+    id SERIAL PRIMARY KEY,
+    product_id INT NOT NULL,
+    rejected_orders INT NOT NULL,
+    success_orders INT NOT NULL,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE cascade
+);
+ALTER TABLE statistics ADD CONSTRAINT statistics_product_id_unique UNIQUE (product_id);
 
 GRANT ALL PRIVILEGES ON DATABASE docker_test TO postgres;
 ALTER DATABASE docker_test OWNER TO postgres;

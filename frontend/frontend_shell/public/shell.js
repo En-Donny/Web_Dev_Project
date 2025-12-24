@@ -1,7 +1,7 @@
 const root = document.getElementById('app');
 const routes = {
   '/': { type: 'static', html: `<section class="container"><h2>Home</h2><p>Добро пожаловать</p></section>` },
-  '/orders': { type: 'remote', url: '/mf/orders' }, // мы будем делать fetch к mf-orders
+  '/orders': { type: 'remote', url: '/mf/orders' },
   '/admin': { type: 'remote', url: '/mf/admin' },
   '/cart': { type: 'remote', url: '/mf/cart' }
 };
@@ -81,7 +81,7 @@ async function loadRoute(path) {
     console.log('[MF] removing previous injected MF resources');
     removeInjectedMFResources();
 
-    // --- Обработка preload (modulepreload / preload) ---
+    // Обработка preload (modulepreload / preload)
     const preloadLinks = Array.from(parsedDoc.querySelectorAll('link[rel="modulepreload"], link[rel="preload"], link[rel="prefetch"]'));
     for (const l of preloadLinks) {
       const rel = l.getAttribute('rel');
@@ -98,7 +98,7 @@ async function loadRoute(path) {
       l.remove();
     }
 
-    // --- CSS ---
+    // CSS
     const cssLinks = Array.from(parsedDoc.querySelectorAll('link[rel~="stylesheet"], link[rel="stylesheet"]'));
     for (const l of cssLinks) {
       const href = l.getAttribute('href') || '';
@@ -112,7 +112,7 @@ async function loadRoute(path) {
       l.remove();
     }
 
-    // --- inline styles ---
+    // inline styles
     const styles = Array.from(parsedDoc.querySelectorAll('style'));
     for (const s of styles) {
       const newStyle = s.cloneNode(true);
@@ -121,16 +121,16 @@ async function loadRoute(path) {
       s.remove();
     }
 
-    // --- Удаляем все <script> из parsedDoc перед вставкой контента ---
+    // Удаляем все <script> из parsedDoc перед вставкой контента полученной страницы
     const scriptsInDoc = Array.from(parsedDoc.querySelectorAll('script'));
     scriptsInDoc.forEach(s => s.remove());
 
-    // --- Вставляем тело ---
+    // Вставляем тело
     const bodyContent = parsedDoc.body ? parsedDoc.body.innerHTML : parsedDoc.documentElement.innerHTML;
     root.innerHTML = bodyContent;
     console.log('[MF] content injected into root');
 
-    // --- Теперь выполняем скрипты в исходном порядке ---
+    // Выполняем скрипты в исходном порядке
     const parsedForScripts = parser.parseFromString(htmlText, 'text/html');
     const scriptsOrdered = Array.from(parsedForScripts.querySelectorAll('script'));
     console.log('[MF] scripts to execute:', scriptsOrdered.length);
@@ -188,7 +188,7 @@ async function loadRoute(path) {
   }
 }
 
-// --- Утилита: удаляет все ранее вставленные ресурсы, помеченные data-mf ---
+// Утилита: удаляет все ранее вставленные ресурсы, помеченные data-mf
 function removeInjectedMFResources(){
   console.log('[MF] removeInjectedMFResources called');
   // link

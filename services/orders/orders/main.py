@@ -5,7 +5,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
-from orders.process_orders import create_order, get_all_orders
+from orders.process_orders import *
 from orders.utils.db_manager import DB_Manager
 from orders.utils.logger import get_logger
 
@@ -15,9 +15,9 @@ logger = get_logger("ORDERS")
 class OrderProcessor:
     def __init__(self):
         self.consumer = AIOKafkaConsumer(
-            os.getenv('ORDERS_REQUEST_TOPIC'),
+            os.getenv('PRODUCTS_REQUEST_TOPIC'),
             bootstrap_servers=os.getenv('KAFKA_BOOTSTRAP_SERVERS'),
-            group_id=os.getenv('ORDERS_GROUP')
+            group_id=os.getenv('PRODUCTS_GROUP')
         )
         self.producer = AIOKafkaProducer(
             bootstrap_servers=os.getenv('KAFKA_BOOTSTRAP_SERVERS'),
@@ -41,21 +41,37 @@ class OrderProcessor:
                 request_type = message['type']
                 data = message['data']
 
-                if request_type == 'order_create':
-                    result = await create_order(db_manager, correlation_id, data, True)
-                elif request_type == 'order_update':
+                if request_type == 'product_create':
+                    result = await create_product(db_manager, correlation_id, data, True)
+                elif request_type == 'product_update':
                     try:
-                        order_id = data["order_id"]
-                        new_order_info = data["order_info"]
-                        result = await create_order(db_manager, order_id, new_order_info, False)
+                        product_id = data["product_id"]
+                        new_product_info = data["product_info"]
+                        result = await create_product(db_manager, product_id, new_product_info, False)
                     except Exception as e:
                         logger.info(f"Error processing message: {e}")
-                elif request_type == 'order_all_get':
-                    result = await get_all_orders(db_manager)
+                elif request_type == 'product_all_get':
+                    result = await get_all_products(db_manager)
                     result = {
-                        record["id"]: {"order_id": record["order_id"],
-                                       "order_info": record["order_info"],
-                                       "order_status": record["order_status"]}           
+                        record["id"]: {"product_id": record["product_id"],
+                                       "product_info": record["product_info"],
+                                       "product_status": record["product_status"]}           
+                                       for record in result}
+                elif request_type == 'statistics_update':
+                    try:
+                        stats_delta_list = []
+                        for key, value in data.items():
+                            stats_delta_list.append((int(key), value["rejected_delta"], value["success_delta"]))
+                        result = await update_statistics(db_manager, stats_delta_list)
+                    except Exception as e:
+                        logger.info(f"Error processing message: {e}")
+                elif request_type == 'statistics_all_get':
+                    result = await get_all_stats(db_manager)
+                    result = {
+                        record["id"]: {"product_id": record["product_id"],
+                                       "product_info": record["product_info"],
+                                       "rejected_orders": record["rejected_orders"],
+                                       "success_orders": record["success_orders"]}
                                        for record in result}
                 else:
                     continue

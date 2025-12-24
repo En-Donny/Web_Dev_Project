@@ -1,6 +1,6 @@
 .container { max-width: 1100px; margin:0 auto; padding:1rem; color:var(--fg); }
-.orders-list { display:flex; flex-direction:column; gap:12px; margin-top:1rem; }
-.order-item {
+.products-list { display:flex; flex-direction:column; gap:12px; margin-top:1rem; }
+.product-item {
   display:flex;
   gap:12px;
   align-items:center;
@@ -11,7 +11,7 @@
   color:var(--card-fg);           /* текст внутри карточки */
   transition: box-shadow .12s ease, transform .06s ease;
 }
-.order-item:hover { box-shadow: 0 6px 18px rgba(0,0,0,0.08); transform: translateY(-2px); }
+.product-item:hover { box-shadow: 0 6px 18px rgba(0,0,0,0.08); transform: translateY(-2px); }
 
 .item-checkbox input { width:20px; height:20px; }
 
@@ -45,6 +45,6 @@ button[disabled] { opacity:0.6; cursor:not-allowed; }
 
 /* responsive */
 @media (max-width:600px){
-  .order-item { flex-direction:column; align-items:flex-start; }
+  .product-item { flex-direction:column; align-items:flex-start; }
   .price-block { align-self:flex-end; }
 }

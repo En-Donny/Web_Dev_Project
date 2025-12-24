@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Admin — Create / Update Order</title>
+  <title>Admin — Create / Update Product</title>
 
   <base href="/mf/admin/">
 
@@ -11,40 +11,46 @@
 </head>
 <body>
   <section class="container">
-    <h2>Создать / Обновить заказ</h2>
+    <h2>Создать / Обновить товар</h2>
 
-    <form id="order-form" novalidate>
-      <!-- Для обновления: вставьте order_id или нажмите Load -->
-      <label>Order ID (для обновления, необязательно)
-        <input id="order_id" name="order_id" placeholder="e.g. e193... или оставьте пустым для создания">
+    <form id="product-form" novalidate>
+      <!-- Для обновления: вставьте product_id или нажмите Load -->
+      <label>Product ID (для обновления, необязательно)
+        <input id="product_id" name="product_id" placeholder="e.g. e193... или оставьте пустым для создания">
       </label>
       <div class="form-row">
         <label>Название
-          <input id="order_title" name="order_title" required minlength="2" placeholder="Название заказа">
+          <input id="product_title" name="product_title" required minlength="2" placeholder="Название заказа">
         </label>
       </div>
 
       <div class="form-row">
         <label>Описание
-          <textarea id="order_description" name="order_description" rows="3" placeholder="Описание (опционально)"></textarea>
+          <textarea id="product_description" name="product_description" rows="3" placeholder="Описание (опционально)"></textarea>
         </label>
       </div>
 
       <div class="form-row">
         <label>Цена (₽)
-          <input id="order_cost" name="order_cost" type="number" min="0" step="0.01" required placeholder="100.00">
+          <input id="product_cost" name="product_cost" type="number" min="0" step="0.01" required placeholder="100.00">
         </label>
       </div>
 
       <div class="form-actions">
         <button type="submit" id="submit-btn">Отправить</button>
-        <button type="button" id="load-btn">Загрузить по order_id</button>
+        <button type="button" id="load-btn">Загрузить по product_id</button>
         <button type="button" id="reset-btn">Сбросить</button>
+        <button type="button" id="stats-btn" class="secondary">Статистика</button>
       </div>
 
       <div id="msg" role="status" aria-live="polite"></div>
     </form>
+
+    <section id="stats-area" class="stats-area" aria-live="polite" style="margin-top:1.25rem;">
+      <!-- will be filled by admin.js -->
+    </section>
   </section>
+
 
   <script type="module" src="admin.js"></script>
 </body>

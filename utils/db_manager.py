@@ -99,52 +99,89 @@ class DB_Manager:
             logger.error(f"Got error while updating record in DB! REASON {e}")
 
 
-    async def create_new_order(self,
-                               order_id,
-                               order_info):
+    async def create_new_product(self,
+                               product_id,
+                               product_info):
         """
-        Метод для вставки данных о новом заказе в таблицу orders.
+        Метод для вставки данных о новом заказе в таблицу products.
 
-        :param order_id: ID заказа.
-        :param order_info: информация заказа.
-        :param order_status: статус заказа.
+        :param product_id: ID заказа.
+        :param product_info: информация заказа.
+        :param product_status: статус заказа.
         :return: Флаг статуса вставки изображения в таблицу.
         """
         query = """
-        INSERT INTO public.orders (order_id,
-                                   order_info,
-                                   order_status)
+        INSERT INTO public.products (product_id,
+                                   product_info,
+                                   product_status)
         VALUES ($1, $2, $3)
         """
         try:
-            await self.pool.execute(query, order_id, order_info,'new')
+            await self.pool.execute(query, product_id, product_info, 'new')
             return request_status_success
         except asyncpg.exceptions.UniqueViolationError:
             return request_status_failure
 
-    async def update_order_info(self, order_id, new_data):
+    async def update_product_info(self, product_id, new_data):
         """
         Метод, предназначенный для изменения информации о заказе
 
         :return: Список Record'ов или сообщение об ошибке, обернутое в список.
         """
         query = """
-        UPDATE public.orders SET order_info = $2, order_status = 'changed'
-        WHERE order_id = $1
+        UPDATE public.products SET product_info = $2, product_status = 'changed'
+        WHERE product_id = $1
         """
         try:
-            await self.pool.execute(query, order_id, new_data)
+            await self.pool.execute(query, product_id, new_data)
         except Exception as e:
             logger.error(f"Got error while updating record in DB! REASON {e}")
 
-    async def get_all_orders(self):
+    async def get_all_products(self):
         """
-        Метод для получения всех ордеров.
+        Метод для получения всех товаров.
 
         :return: Record или сообщение об ошибке, обернутое в список.
         """
         query = """
-        SELECT * FROM public.orders
+        SELECT * FROM public.products
+        """
+        try:
+            return await self.pool.fetch(query)
+        except:
+            return ["FAILED OF SEARCHING"]
+
+    async def update_statistics(self, stats_delta_list):
+        """
+        Метод для пакетного инкрементного обновления статистики
+        
+        :param stats_delta_list: Список кортежей [(product_id, rejected_delta, success_delta), ...]
+        :return: None или сообщение об ошибке
+        """
+        query = """
+        INSERT INTO statistics (product_id, rejected_orders, success_orders)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (product_id) 
+        DO UPDATE SET 
+            rejected_orders = GREATEST(statistics.rejected_orders + EXCLUDED.rejected_orders, 0),
+            success_orders = GREATEST(statistics.success_orders + EXCLUDED.success_orders, 0)
+        """
+        try:
+            await self.pool.executemany(query, stats_delta_list)
+        except Exception as e:
+            logger.error(f"Got error while bulk incrementing statistics! REASON: {e}")
+
+    async def get_all_stats(self):
+        """
+        Метод для получения всех статистик по товарам.
+
+        :return: Record или сообщение об ошибке, обернутое в список.
+        """
+        query = """
+        SELECT pr.id, pr.product_id, pr.product_info, st.rejected_orders, st.success_orders 
+        FROM public.products pr
+        JOIN public.statistics st
+        ON st.product_id = pr.id
         """
         try:
             return await self.pool.fetch(query)

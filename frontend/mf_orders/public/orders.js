@@ -1,42 +1,42 @@
-const root = document.getElementById('orders-root');
+const root = document.getElementById('products-root');
 const addToCartBtn = document.getElementById('add-to-cart-btn');
 const selectAllBtn = document.getElementById('select-all-btn');
 const deselectAllBtn = document.getElementById('deselect-all-btn');
 
 const CART_KEY = 'cart_items';
-const STORE_KEY = 'orders_cart_state'; // ранее для qty локально (если нужно)
-let latestOrders = []; // массив объектов { id, order_id, title, description, price, status }
+let latestProducts = []; // массив объектов { id, product_id, title, description, price, status }
 
-async function fetchOrders() {
-  const resp = await fetch('/api/order_all_get', { method: 'GET' });
-  if (!resp.ok) throw new Error('Не удалось получить заказы: ' + resp.status);
+async function fetchProducts() {
+  const resp = await fetch('/api/product_all_get', { method: 'GET' });
+  if (!resp.ok) throw new Error('Не удалось получить товары: ' + resp.status);
   return resp.json();
 }
 
 function parseBackendData(obj) {
+  // вход: { "4": { product_id: "...", product_info: "{...}" or object, product_status: "..." }, ... }
   const arr = [];
   for (const pk in obj) {
     if (!Object.prototype.hasOwnProperty.call(obj, pk)) continue;
     const rec = obj[pk];
-    let info = rec.order_info;
+    let info = rec.product_info;
     try {
       if (typeof info === 'string') info = JSON.parse(info);
     } catch (e) {
-      console.warn('Не удалось распарсить order_info для', pk, e);
+      console.warn('Не удалось распарсить product_info для', pk, e);
       info = info || {};
     }
-    const order = {
+    const prod = {
       id: pk,
-      order_id: rec.order_id,
-      status: rec.order_status,
+      product_id: rec.product_id,
+      status: rec.product_status,
       info: info,
-      title: info.title || info.name || (`Товар #${pk}`),
+      title: info.title || info.name || `Товар #${pk}`,
       description: info.description || info.desc || '',
       price: parseFloat(info.price ?? info.cost ?? 0) || 0
     };
-    arr.push(order);
+    arr.push(prod);
   }
-  arr.sort((a,b)=> Number(a.id)-Number(b.id));
+  arr.sort((a,b)=> Number(a.id) - Number(b.id));
   return arr;
 }
 
@@ -48,37 +48,36 @@ function saveCart(items) {
   localStorage.setItem(CART_KEY, JSON.stringify(items));
 }
 
-// UI helpers
 function updateAddToCartButton() {
-  const anyChecked = !!root.querySelector('input.order-select:checked');
+  const anyChecked = !!root.querySelector('input.product-select:checked');
   addToCartBtn.disabled = !anyChecked;
 }
 
-function renderOrders(orders) {
-  latestOrders = orders;
-  if (!orders.length) {
+function renderProducts(products) {
+  latestProducts = products;
+  if (!products.length) {
     root.innerHTML = '<p>Товары отсутствуют</p>';
     addToCartBtn.disabled = true;
     return;
   }
 
   const list = document.createElement('div');
-  list.className = 'orders-list';
+  list.className = 'products-list';
 
-  orders.forEach(o => {
+  products.forEach(p => {
     const item = document.createElement('div');
-    item.className = 'order-item';
+    item.className = 'products-item';
     item.innerHTML = `
       <label class="item-checkbox">
-        <input type="checkbox" class="order-select" data-id="${escapeHtml(o.id)}" />
+        <input type="checkbox" class="product-select" data-id="${escapeHtml(p.id)}" />
       </label>
       <div class="meta">
-        <h3>${escapeHtml(o.title)}</h3>
-        <p>${escapeHtml(o.description)}</p>
-        <small>ID: ${escapeHtml(o.order_id)} • статус: ${escapeHtml(o.status)}</small>
+        <h3>${escapeHtml(p.title)}</h3>
+        <p>${escapeHtml(p.description)}</p>
+        <small>ID: ${escapeHtml(p.product_id)} • статус: ${escapeHtml(p.status)}</small>
       </div>
       <div class="price-block">
-        <div class="price">${(o.price || 0).toFixed(2)} ₽</div>
+        <div class="price">${(p.price || 0).toFixed(2)} ₽</div>
       </div>
     `;
     list.appendChild(item);
@@ -88,53 +87,52 @@ function renderOrders(orders) {
   root.appendChild(list);
 
   // attach checkbox handlers
-  root.querySelectorAll('input.order-select').forEach(ch => {
+  root.querySelectorAll('input.product-select').forEach(ch => {
     ch.addEventListener('change', () => {
       updateAddToCartButton();
     });
   });
-
   updateAddToCartButton();
 }
 
-// event handlers
 addToCartBtn.addEventListener('click', () => {
-  const checked = Array.from(root.querySelectorAll('input.order-select:checked'));
+  const checked = Array.from(root.querySelectorAll('input.product-select:checked'));
   if (!checked.length) return;
   const cart = loadCart();
   const existingMap = Object.fromEntries(cart.map(c => [String(c.id), c]));
   for (const ch of checked) {
     const id = ch.dataset.id;
-    const order = latestOrders.find(x => String(x.id) === String(id));
-    if (!order) continue;
-    // если уже есть в корзине — увеличивать не будем (требование: добавить в количестве 1)
-    if (existingMap[id]) continue;
-    const item = {
-      id: order.id,
-      order_id: order.order_id,
-      title: order.title,
-      price: order.price,
-      qty: 1
-    };
-    cart.push(item);
+    const prod = latestProducts.find(x => String(x.id) === String(id));
+    if (!prod) continue;
+    // если уже есть — обновим selected = true, не увеличиваем количество
+    if (existingMap[id]) {
+      existingMap[id].selected = true;
+    } else {
+      const item = {
+        id: prod.id,
+        product_id: prod.product_id,
+        title: prod.title,
+        price: prod.price,
+        qty: 1,
+        selected: true   // ВАЖНО: помечаем как выбранный по умолчанию
+      };
+      cart.push(item);
+    }
   }
   saveCart(cart);
-  // даём пользователю фидбек и, при желании, можно перейти на cart автоматически
   addToCartBtn.textContent = 'Добавлено ✓';
   setTimeout(()=> addToCartBtn.textContent = 'Добавить товары в корзину', 1200);
-  // возможно стоит выключить выбранные чекбоксы
-  root.querySelectorAll('input.order-select:checked').forEach(i => i.checked = false);
+  // снять выделение в списке
+  root.querySelectorAll('input.product-select:checked').forEach(i=> i.checked = false);
   updateAddToCartButton();
-  // уведомить shell (или можно просто оставить)
-  // window.dispatchEvent(new CustomEvent('cart:updated'));
 });
 
 selectAllBtn.addEventListener('click', () => {
-  root.querySelectorAll('input.order-select').forEach(i => i.checked = true);
+  root.querySelectorAll('input.product-select').forEach(i => i.checked = true);
   updateAddToCartButton();
 });
 deselectAllBtn.addEventListener('click', () => {
-  root.querySelectorAll('input.order-select').forEach(i => i.checked = false);
+  root.querySelectorAll('input.product-select').forEach(i => i.checked = false);
   updateAddToCartButton();
 });
 
@@ -143,9 +141,9 @@ function escapeHtml(s){ return String(s || '').replace(/[&<>"']/g, c => ({'&':'&
 (async function init(){
   try {
     root.innerHTML = '<p>Загрузка...</p>';
-    const raw = await fetchOrders();
-    const orders = parseBackendData(raw);
-    renderOrders(orders);
+    const raw = await fetchProducts();
+    const products = parseBackendData(raw);
+    renderProducts(products);
   } catch (err) {
     root.innerHTML = `<p class="error">Ошибка при загрузке товаров: ${escapeHtml(err.message || err)}</p>`;
     console.error(err);
