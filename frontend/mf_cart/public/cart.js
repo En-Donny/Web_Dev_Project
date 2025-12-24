@@ -1,3 +1,5 @@
+import { logCartEvent } from '/shared/cart_log.js';
+
 const CART_KEY = 'cart_items';
 
 function loadCart(){ try { return JSON.parse(localStorage.getItem(CART_KEY)) || []; } catch { return []; } }
@@ -125,16 +127,19 @@ function attachCartHandlers(){
   // remove buttons
   root.querySelectorAll('.remove-btn').forEach(btn => {
     btn.addEventListener('click', () => {
+      const prev = loadCart();
       const id = btn.dataset.id;
       let items = loadCart();
       items = items.filter(x => String(x.id) !== String(id));
       saveCart(items);
+      logCartEvent('remove', prev, loadCart(), {page:'cart'});
       renderCart();
     });
   });
 }
 
 function changeQty(id, delta, valueNode, ctrlNode){
+  const prev = loadCart();
   const items = loadCart();
   const idx = items.findIndex(x => String(x.id) === String(id));
   if(idx < 0) return;
@@ -142,6 +147,8 @@ function changeQty(id, delta, valueNode, ctrlNode){
   if(newQty < 1) newQty = 1;
   items[idx].qty = newQty;
   saveCart(items);
+  const curr = loadCart();
+  logCartEvent('change_qty', prev, curr, {page:'cart'});
 
   // Обновляем UI: количество и цены в строке (сохранён формат: старая/скидочная)
   if(valueNode) valueNode.textContent = String(newQty);

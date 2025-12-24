@@ -2,6 +2,9 @@ import uvicorn
 import os
 import json
 import uuid
+import time
+import logging
+from logging.handlers import RotatingFileHandler
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
@@ -125,6 +128,40 @@ async def create_product(request: Request):
 @app.post('/statistics_update')
 async def create_product(request: Request):
     return await process_request(request, 'statistics_update')
+
+logger_front = logging.getLogger("cart_logger")
+logger_front.setLevel(logging.INFO)
+handler = RotatingFileHandler("/app/logs/logging_cart.txt", maxBytes=10*1024*1024, backupCount=5, encoding='utf-8')
+formatter = logging.Formatter('%(message)s')
+handler.setFormatter(formatter)
+logger_front.addHandler(handler)
+
+@app.post('/cart_log')
+async def cart_log(request: Request):
+    # Дополнительная валидация: ограничение размера текущ/prev
+    try:
+        payload = await request.json()
+        # формируем строку: [Время] ||| [User: ...] ||| [event: ...] [Prev: ...] [Curr: ...]
+        ts = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
+        # user identification: если у тебя есть аутентификация, возьми user id из request.state или jwt
+        client_host = request.client.host if request.client else 'unknown'
+        ua = request.headers.get('user-agent', '')[:200]
+        user_repr = f"user_ip={client_host}"
+        # safe json dump
+        # import json
+        # prev_json = json.dumps(payload.prev, ensure_ascii=False)
+        # curr_json = json.dumps(payload.curr, ensure_ascii=False)
+        # meta_json = json.dumps(payload.meta, ensure_ascii=False)
+        prev_json = payload["prev"]
+        curr_json = payload["curr"]
+        meta_json = payload["meta"]
+        line = f"[{ts}] ||| [{user_repr}] ||| [meta: {meta_json}] ||| [prev: {prev_json}] ||| [curr: {curr_json}]"
+        logger_front.info(line)
+    except Exception as e:
+        # не ломаем работу — возвращаем 200, но можно логировать ошибку
+        logging.exception("Failed to log cart")
+        return Response(status_code=500, content="Internal Server Error")
+    return {"status":"ok"}
 
 
 async def approve_send_request(topic, data, correlation_id):

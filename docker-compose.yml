@@ -95,6 +95,7 @@ services:
     volumes:
       - ./services/back/:/app/
       - ./utils/:/app/back/utils/
+      - ./back_logs/:/app/logs/
     env_file:
       - ./.env
     ports:

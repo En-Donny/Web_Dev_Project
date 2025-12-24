@@ -1,3 +1,5 @@
+import { logCartEvent } from '/shared/cart_log.js';
+
 const root = document.getElementById('products-root');
 const addToCartBtn = document.getElementById('add-to-cart-btn');
 const selectAllBtn = document.getElementById('select-all-btn');
@@ -117,6 +119,7 @@ function renderProducts(products) {
 addToCartBtn.addEventListener('click', () => {
   const checked = Array.from(root.querySelectorAll('input.product-select:checked'));
   if (!checked.length) return;
+  const prev = loadCart();
   const cart = loadCart();
   const existingMap = Object.fromEntries(cart.map(c => [String(c.id), c]));
   for (const ch of checked) {
@@ -140,6 +143,8 @@ addToCartBtn.addEventListener('click', () => {
     }
   }
   saveCart(cart);
+  const curr = loadCart();
+  logCartEvent('add', prev, curr, {page: 'orders'});
   addToCartBtn.textContent = 'Добавлено ✓';
   setTimeout(()=> addToCartBtn.textContent = 'Добавить товары в корзину', 1200);
   // снять выделение в списке
