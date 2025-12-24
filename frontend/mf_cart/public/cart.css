@@ -33,6 +33,11 @@
 /* summary */
 .summary-row { margin-top:16px; text-align:right; font-size:1.15rem; color:var(--card-fg); }
 
+.price-old { color: var(--muted); font-size: 0.95rem; }
+.price-discount { color: var(--accent); font-weight:700; font-size:0.98rem; margin-top:4px; }
+.price-old s { color: var(--muted); text-decoration-thickness: 2px; }
+.line-total { font-weight:700; }
+
 /* responsive */
 @media (max-width:600px){
   .cart-item { flex-direction:column; align-items:flex-start; gap:8px; }

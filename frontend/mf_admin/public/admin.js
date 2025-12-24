@@ -72,10 +72,12 @@ if (form) {
     const title = titleInput.value.trim();
     const description = descInput.value.trim();
     const price = parseFloat(costInput.value);
+    const discount = parseFloat(document.getElementById('product_discount').value);
     const infoObj = {
       title,
       description,
-      price: isNaN(price) ? 0 : price
+      price: isNaN(price) ? 0 : price,
+      product_discount: isNaN(discount) ? 0 : discount  // процент
     };
 
     try {
@@ -122,6 +124,7 @@ if (loadBtn) {
       titleInput.value = info.title || '';
       descInput.value = info.description || '';
       costInput.value = (info.price !== undefined) ? String(info.price) : '';
+      document.getElementById('product_discount').value = (info.product_discount !== undefined) ? String(info.product_discount) : '0';
       showMessage(`Товар ${escapeHtml(product_id)} загружен`);
     } catch (err) {
       console.error(err);

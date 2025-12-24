@@ -6,6 +6,12 @@ function saveCart(items){ localStorage.setItem(CART_KEY, JSON.stringify(items));
 function escapeHtml(s){ return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function formatPrice(n){ return (Number(n) || 0).toFixed(2) + ' ₽'; }
 
+function discountedPrice(price, discountPercent){
+  const d = Number(discountPercent) || 0;
+  if (d <= 0) return Number(price || 0);
+  return Math.round((Number(price || 0) * (1 - d/100)) * 100) / 100;
+}
+
 function getNodes() {
   return {
     root: document.getElementById('cart-root'),
@@ -17,6 +23,7 @@ function getNodes() {
 function renderCart(){
   const { root } = getNodes();
   if(!root) return;
+
   const items = loadCart();
   if(!items.length){
     root.innerHTML = '<p>Корзина пуста.</p>';
@@ -29,8 +36,17 @@ function renderCart(){
   list.className = 'cart-list';
 
   items.forEach(it => {
+    const orig = Number(it.price || 0);
+    const disc = Number(it.discount || 0);
+    const qty = Number(it.qty || 1);
+    const origTotal = orig * qty;
+    const unitDisc = discountedPrice(orig, disc);
+    const discTotal = unitDisc * qty;
+
     const el = document.createElement('div');
     el.className = 'cart-item';
+    el.dataset.id = String(it.id);
+
     el.innerHTML = `
       <label class="item-checkbox">
         <input type="checkbox" class="product-select" data-id="${escapeHtml(it.id)}" ${it.selected ? 'checked' : ''}>
@@ -38,17 +54,21 @@ function renderCart(){
 
       <div class="cart-meta">
         <h3>${escapeHtml(it.title)}</h3>
-        <small>ID: ${escapeHtml(it.product_id || it.product_id || '')}</small>
+        <small>ID: ${escapeHtml(it.product_id || '')}</small>
       </div>
 
       <div class="cart-controls">
         <div class="qty-controls" data-id="${escapeHtml(it.id)}" role="group" aria-label="Количество товара ${escapeHtml(it.title)}">
           <button class="qty-btn dec" data-action="dec" aria-label="Уменьшить количество">−</button>
-          <span class="qty-value" aria-live="polite">${Number(it.qty)}</span>
+          <span class="qty-value" aria-live="polite">${qty}</span>
           <button class="qty-btn inc" data-action="inc" aria-label="Увеличить количество">+</button>
         </div>
 
-        <div class="cart-price">${formatPrice(it.price * it.qty)}</div>
+        <div class="cart-price">
+          <div class="price-old"><s class="price-old-val">${formatPrice(origTotal)}</s></div>
+          <div class="price-discount">-${disc}% → <span class="price-discount-val">${formatPrice(discTotal)}</span></div>
+        </div>
+
         <button data-id="${escapeHtml(it.id)}" class="remove-btn" aria-label="Удалить">×</button>
       </div>
     `;
@@ -123,9 +143,24 @@ function changeQty(id, delta, valueNode, ctrlNode){
   items[idx].qty = newQty;
   saveCart(items);
 
+  // Обновляем UI: количество и цены в строке (сохранён формат: старая/скидочная)
   if(valueNode) valueNode.textContent = String(newQty);
-  const priceNode = ctrlNode.closest('.cart-controls').querySelector('.cart-price');
-  if(priceNode) priceNode.textContent = formatPrice(items[idx].price * items[idx].qty);
+
+  // Найдём родительский .cart-item для этого контроля
+  const cartItemEl = ctrlNode.closest('.cart-item');
+  if(cartItemEl){
+    const priceOldNode = cartItemEl.querySelector('.price-old-val');
+    const priceDiscNode = cartItemEl.querySelector('.price-discount-val');
+
+    const unitOrig = Number(items[idx].price || 0);
+    const unitDisc = discountedPrice(unitOrig, items[idx].discount || 0);
+
+    const newOrigTotal = unitOrig * newQty;
+    const newDiscTotal = unitDisc * newQty;
+
+    if(priceOldNode) priceOldNode.textContent = formatPrice(newOrigTotal);
+    if(priceDiscNode) priceDiscNode.textContent = formatPrice(newDiscTotal);
+  }
 
   updateSummary();
 }
@@ -133,7 +168,11 @@ function changeQty(id, delta, valueNode, ctrlNode){
 function updateSummary(){
   const { summary } = getNodes();
   const items = loadCart();
-  const total = items.reduce((s,it) => s + ((it.selected ? (Number(it.price||0) * Number(it.qty||0)) : 0)), 0);
+  const total = items.reduce((s, it) => {
+    if (!it.selected) return s;
+    const unit = discountedPrice(it.price, it.discount || 0);
+    return s + (unit * Number(it.qty || 0));
+  }, 0);
   if(summary) summary.innerHTML = `<div class="summary-row"><strong>Итого: ${formatPrice(total)}</strong></div>`;
 }
 

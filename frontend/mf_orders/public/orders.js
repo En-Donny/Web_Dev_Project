@@ -12,6 +12,12 @@ async function fetchProducts() {
   return resp.json();
 }
 
+function discountedPrice(price, discountPercent){
+  const d = Number(discountPercent) || 0;
+  if (d <= 0) return Number(price || 0);
+  return Math.round((Number(price || 0) * (1 - d/100)) * 100) / 100;
+}
+
 function parseBackendData(obj) {
   // вход: { "4": { product_id: "...", product_info: "{...}" or object, product_status: "..." }, ... }
   const arr = [];
@@ -32,7 +38,8 @@ function parseBackendData(obj) {
       info: info,
       title: info.title || info.name || `Товар #${pk}`,
       description: info.description || info.desc || '',
-      price: parseFloat(info.price ?? info.cost ?? 0) || 0
+      price: parseFloat(info.price ?? info.cost ?? 0) || 0,
+      discount: parseFloat(info.product_discount ?? info.discount ?? 0) || 0
     };
     arr.push(prod);
   }
@@ -67,6 +74,18 @@ function renderProducts(products) {
   products.forEach(p => {
     const item = document.createElement('div');
     item.className = 'products-item';
+    const orig = p.price || 0;
+    const disc = p.discount || 0;
+    const newPrice = discountedPrice(orig, disc);
+    let priceHtml = '';
+    if (disc > 0) {
+      priceHtml = `
+        <div class="price-old"><s>${orig.toFixed(2)} ₽</s></div>
+        <div class="price-discount">-${disc}% → <strong>${newPrice.toFixed(2)} ₽</strong></div>
+      `;
+    } else {
+      priceHtml = `<div class="price">${orig.toFixed(2)} ₽</div>`;
+    }
     item.innerHTML = `
       <label class="item-checkbox">
         <input type="checkbox" class="product-select" data-id="${escapeHtml(p.id)}" />
@@ -77,7 +96,7 @@ function renderProducts(products) {
         <small>ID: ${escapeHtml(p.product_id)} • статус: ${escapeHtml(p.status)}</small>
       </div>
       <div class="price-block">
-        <div class="price">${(p.price || 0).toFixed(2)} ₽</div>
+        ${priceHtml}
       </div>
     `;
     list.appendChild(item);
@@ -113,6 +132,7 @@ addToCartBtn.addEventListener('click', () => {
         product_id: prod.product_id,
         title: prod.title,
         price: prod.price,
+        discount: prod.discount || 0,
         qty: 1,
         selected: true   // ВАЖНО: помечаем как выбранный по умолчанию
       };

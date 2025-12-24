@@ -43,6 +43,10 @@ input, textarea {
 /* disabled button look */
 button[disabled] { opacity:0.6; cursor:not-allowed; }
 
+.price-old { color: var(--muted); font-size: 0.95rem; }
+.price-discount { color: var(--accent); font-weight:700; font-size:0.98rem; margin-top:4px; }
+.price-old s { color: var(--muted); text-decoration-thickness: 2px; }
+
 /* responsive */
 @media (max-width:600px){
   .product-item { flex-direction:column; align-items:flex-start; }
