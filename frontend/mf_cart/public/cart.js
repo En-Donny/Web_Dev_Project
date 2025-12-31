@@ -1,9 +1,53 @@
 import { logCartEvent } from '/shared/cart_log.js';
+import { loadCartFromStorage, loadCartSyncForUI, saveCartDebounced } from '/shared/indexeddb_cart.js';
+
+
+// in-memory current cart for this tab
+let currentCart = [];
 
 const CART_KEY = 'cart_items';
 
-function loadCart(){ try { return JSON.parse(localStorage.getItem(CART_KEY)) || []; } catch { return []; } }
-function saveCart(items){ localStorage.setItem(CART_KEY, JSON.stringify(items)); }
+async function initCartFromDB() {
+  try {
+    const items = await loadCartFromStorage(); // async function from shared
+    currentCart = Array.isArray(items) ? items : [];
+  } catch (e) {
+    console.warn('Failed to load cart from IndexedDB, falling back to localStorage', e);
+    try {
+      const raw = localStorage.getItem('cart_items');
+      currentCart = raw ? JSON.parse(raw) : [];
+    } catch (ee) {
+      currentCart = [];
+    }
+  }
+  // expose globally in this tab
+  try { window.__cart_items = currentCart; } catch(e) {}
+}
+
+
+// function loadCart(){ try { return JSON.parse(localStorage.getItem(CART_KEY)) || []; } catch { return []; } }
+
+// synchronous wrapper used by UI code
+function loadCart() {
+  // return in-memory cart (synchronous)
+  return currentCart || [];
+}
+
+// function saveCart(cart) {
+//   // сохраняем немедленно в память/вызов логики UI, а запись в DB пойдёт через debounce
+//   saveCartDebounced(cart);
+// }
+function saveCart(cart) {
+  currentCart = Array.isArray(cart) ? cart : [];
+  // mirror for other scripts in the same tab (orders.js)
+  try { window.__cart_items = currentCart; } catch(e) {}
+  // queue write to IndexedDB (debounced)
+  try { saveCartDebounced(currentCart); } catch (e) { console.warn('saveCartDebounced missing', e); }
+  // optional: keep localStorage as fallback for older code/debug
+  try { localStorage.setItem('cart_items', JSON.stringify(currentCart)); } catch (e) {}
+}
+// function saveCart(items){ localStorage.setItem(CART_KEY, JSON.stringify(items)); }
+
 
 function escapeHtml(s){ return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function formatPrice(n){ return (Number(n) || 0).toFixed(2) + ' ₽'; }
@@ -127,19 +171,20 @@ function attachCartHandlers(){
   // remove buttons
   root.querySelectorAll('.remove-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const prev = loadCart();
+      const prev = JSON.parse(JSON.stringify(loadCart()));
       const id = btn.dataset.id;
       let items = loadCart();
       items = items.filter(x => String(x.id) !== String(id));
       saveCart(items);
-      logCartEvent('remove', prev, loadCart(), {page:'cart'});
+      const curr = JSON.parse(JSON.stringify(loadCart()));
+      logCartEvent('remove', prev, curr, {page:'cart'});
       renderCart();
     });
   });
 }
 
 function changeQty(id, delta, valueNode, ctrlNode){
-  const prev = loadCart();
+  const prev = JSON.parse(JSON.stringify(loadCart()));
   const items = loadCart();
   const idx = items.findIndex(x => String(x.id) === String(id));
   if(idx < 0) return;
@@ -147,7 +192,7 @@ function changeQty(id, delta, valueNode, ctrlNode){
   if(newQty < 1) newQty = 1;
   items[idx].qty = newQty;
   saveCart(items);
-  const curr = loadCart();
+  const curr = JSON.parse(JSON.stringify(loadCart()));
   logCartEvent('change_qty', prev, curr, {page:'cart'});
 
   // Обновляем UI: количество и цены в строке (сохранён формат: старая/скидочная)
@@ -238,7 +283,10 @@ function runWhenReady(fn) {
 }
 
 runWhenReady(() => {
-  const attemptRender = (triesLeft = 5) => {
+  const attemptInit = async (triesLeft = 5) => {
+    // load from DB
+    await initCartFromDB();
+    // proceed with existing render logic
     const { root, placeBtn } = getNodes();
     if (root) {
       renderCart();
@@ -246,7 +294,6 @@ runWhenReady(() => {
         placeBtn.addEventListener('click', () => {
           placeBtn.disabled = true;
           placeOrder().finally(()=> {
-            // обновим состояние и кнопку
             updatePlaceButtonState();
             placeBtn.disabled = false;
           });
@@ -255,10 +302,10 @@ runWhenReady(() => {
       return;
     }
     if (triesLeft <= 0) {
-      console.warn('cart: root not found after retries');
+      console.warn('cart: root not found to init');
       return;
     }
-    setTimeout(() => attemptRender(triesLeft - 1), 50);
+    setTimeout(() => attemptInit(triesLeft - 1), 50);
   };
-  attemptRender(5);
+  attemptInit(5);
 });

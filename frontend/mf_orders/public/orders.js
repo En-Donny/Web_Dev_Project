@@ -1,4 +1,6 @@
 import { logCartEvent } from '/shared/cart_log.js';
+import { saveCartDebounced } from '/shared/indexeddb_cart.js';
+
 
 const root = document.getElementById('products-root');
 const addToCartBtn = document.getElementById('add-to-cart-btn');
@@ -119,9 +121,11 @@ function renderProducts(products) {
 addToCartBtn.addEventListener('click', () => {
   const checked = Array.from(root.querySelectorAll('input.product-select:checked'));
   if (!checked.length) return;
-  const prev = loadCart();
-  const cart = loadCart();
+
+  const prev = JSON.parse(JSON.stringify(window.__cart_items || []));
+  const cart = Array.isArray(window.__cart_items) ? window.__cart_items : [];
   const existingMap = Object.fromEntries(cart.map(c => [String(c.id), c]));
+
   for (const ch of checked) {
     const id = ch.dataset.id;
     const prod = latestProducts.find(x => String(x.id) === String(id));
@@ -142,9 +146,16 @@ addToCartBtn.addEventListener('click', () => {
       cart.push(item);
     }
   }
-  saveCart(cart);
-  const curr = loadCart();
+
+  try { window.__cart_items = cart; } catch(e) {}
+  try { saveCartDebounced(cart); } catch(e) { console.warn('saveCartDebounced missing', e); }
+
+  const curr = JSON.parse(JSON.stringify(window.__cart_items || []));
   logCartEvent('add', prev, curr, {page: 'orders'});
+
+  // saveCart(cart);
+  // const curr = loadCart();
+  // logCartEvent('add', prev, curr, {page: 'orders'});
   addToCartBtn.textContent = 'Добавлено ✓';
   setTimeout(()=> addToCartBtn.textContent = 'Добавить товары в корзину', 1200);
   // снять выделение в списке
